@@ -43,4 +43,4 @@ This software is licensed under 3-clause BSD license. See LICENSE file for
 details.
 
 
-.. _extfslib: https://github.com/gryf/mc_extfs
+.. _extfslib: https://github.com/gryf/mc_extfslib
