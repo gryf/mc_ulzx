@@ -3,32 +3,33 @@
 Read only, Amiga LZX[1] archiver Virtual filesystem executive for Midnight
 Commander.
 
-Tested against python 3.6, unlzx[1] 1.1 and mc 4.8.22
+Tested against python 3.8, unlzx[1] 1.1 and mc 4.8.22
 
 [1] ftp://us.aminet.net/pub/aminet/misc/unix/unlzx.c.gz.readme
 
 Changelog:
+    1.3 Code cleanup
     1.2 Use python3
     1.1 Moved common code into extfslib library
     1.0 Initial release
 
 Author: Roman 'gryf' Dobosz <gryf73@gmail.com>
-Date: 2019-06-30
+Date: 2023-10-20
 Version: 1.2
 Licence: BSD
 """
 import os
-import sys
 import re
 import shutil
-from subprocess import call, CalledProcessError
-from tempfile import mkdtemp, mkstemp
+import subprocess
+import sys
+import tempfile
 
-from extfslib import Archive, parse_args
+import extfslib
 
 
-class ULzx(Archive):
-    """Archive handle. Provides interface to MC's extfs subsystem"""
+class ULzx(extfslib.Archive):
+    """LZX archive handle. Provides interface to MC's extfs subsystem"""
     LINE_PAT = re.compile(b"^\s+(?P<size>\d+)\s+"
                           b"((n/a)|\d+)\s"
                           b"(?P<time>\d{2}:\d{2}:\d{2})\s+"
@@ -87,7 +88,7 @@ class ULzx(Archive):
 
     def run(self, dst):
         """Execute file out of archive"""
-        fdesc, tmp_file = mkstemp()
+        fdesc, tmp_file = tempfile.mkstemp()
         os.close(fdesc)
         result = 0
 
@@ -96,42 +97,35 @@ class ULzx(Archive):
 
         os.chmod(tmp_file, int("700", 8))
 
-        try:
-            result = call([tmp_file])
-        finally:
-            try:
-                os.unlink(tmp_file)
-            except OSError:
-                pass
+        with open(os.devnull, "w") as fnull:
+            result = subprocess.run([tmp_file], stderr=fnull)
+        os.unlink(tmp_file)
 
-        return result
+        return result.returncode
 
     def copyout(self, src, dst):
         """Unfortunately, to copy one file out entire LZX archive have to be
         extracted. For small archives is not a problem, but in relatively big
         one it could be a performance issue."""
-        tmp_dir = mkdtemp()
+        tmp_dir = tempfile.mkdtemp()
         src = self._get_real_name(src)
         current_dir = os.path.abspath(os.curdir)
         os.chdir(tmp_dir)
 
-        try:
-            with open(os.devnull, "w") as fnull:
-                result = call([self.ARCHIVER, self.CMDS['read'],
-                               os.path.join(current_dir, self._arch)],
-                              stdout=fnull, stderr=fnull)
-            if result == 0:
-                # use subprocess, as shutil.copy2 will complain about mixing
-                # strings with bytes
-                subprocess.run(['cp', src, dst])
-        except CalledProcessError:
-            return 1
-        finally:
-            shutil.rmtree(tmp_dir)
-            os.chdir(current_dir)
+        with open(os.devnull, "w") as fnull:
+            result = subprocess.run([self.ARCHIVER, self.CMDS['read'],
+                                     os.path.join(current_dir, self._arch)],
+                                    stdout=fnull, stderr=fnull)
+        if result.returncode == 0:
+            # use subprocess, as shutil.copy2 will complain about mixing
+            # strings with bytes
+            subprocess.run(['cp', src, dst])
 
-        return result
+        shutil.rmtree(tmp_dir)
+        os.chdir(current_dir)
+
+        return result.returncode
 
 
 if __name__ == "__main__":
-    sys.exit(parse_args(ULzx))
+    sys.exit(extfslib.parse_args(ULzx))
