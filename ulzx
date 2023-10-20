@@ -121,7 +121,9 @@ class ULzx(Archive):
                                os.path.join(current_dir, self._arch)],
                               stdout=fnull, stderr=fnull)
             if result == 0:
-                shutil.copy2(src, dst)
+                # use subprocess, as shutil.copy2 will complain about mixing
+                # strings with bytes
+                subprocess.run(['cp', src, dst])
         except CalledProcessError:
             return 1
         finally:
