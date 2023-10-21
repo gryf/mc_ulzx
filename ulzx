@@ -30,37 +30,44 @@ import extfslib
 
 class ULzx(extfslib.Archive):
     """LZX archive handle. Provides interface to MC's extfs subsystem"""
-    LINE_PAT = re.compile(b"^\s+(?P<size>\d+)\s+"
-                          b"((n/a)|\d+)\s"
-                          b"(?P<time>\d{2}:\d{2}:\d{2})\s+"
-                          b"(?P<date>\d+-[a-z]{3}-\d{4})\s"
-                          b"(?P<perms>[h-][s-][p-][a-][r-][w-][e-][d-])\s"
-                          b"\"(?P<fpath>.*)\"")
-    ARCHIVER = b"unlzx"
-    CMDS = {"list": b"-v",
-            "read": b"-x"}
-    DATETIME = b"%02d-%02d-%s %02d:%02d"
+    LINE_PAT = re.compile(r"^\s+(?P<size>\d+)\s+"
+                          r"((n/a)|\d+)\s"
+                          r"(?P<time>\d{2}:\d{2}:\d{2})\s+"
+                          r"(?P<date>\d+-[a-z]{3}-\d{4})\s"
+                          r"(?P<perms>[h-][s-][p-][a-][r-][w-][e-][d-])\s"
+                          r"\"(?P<fpath>.*)\"")
+    ARCHIVER = "unlzx"
+    CMDS = {"list": "-v",
+            "read": "-x"}
+    DATETIME = "%02d-%02d-%s %02d:%02d"
 
     def _get_date(self, time, date):
         """Return MM-DD-YYYY hh:mm formatted date out of time and date
         strings"""
-        month_list = [b"jan", b"feb", b"mar", b"apr", b"may", b"jun", b"jul",
-                      b"aug", b"sep", b"oct", b"nov", b"dec"]
-        day, month, year = date.split(b"-")
+        month_list = ["jan", "fe", "mar", "apr", "may", "jun", "jul",
+                      "aug", "sep", "oct", "nov", "dec"]
+        day, month, year = date.split("-")
         month = month_list.index(month) + 1
-        hours, minutes, dummy = time.split(b":")
+        hours, minutes, dummy = time.split(":")
         return self.DATETIME % (month, int(day), year, int(hours),
                                 int(minutes))
+
+    def _map_name(self, name):
+        if name.startswith(" "):
+            new_name = "".join(["~", name[1:]])
+            return new_name
+        return name
 
     def _get_dir(self):
         """Prepare archive file listing"""
         contents = []
 
-        out = self._call_command("list")
-        if not out:
-            return
+        out = subprocess.run([self.ARCHIVER, self.CMDS['list'], self._arch],
+                             capture_output=True, encoding="latin-1")
+        if out.stderr:
+            sys.stderr.write(out.stderr)
 
-        for line in out.split(b"\n"):
+        for line in out.stdout.split("\n"):
             match = self.LINE_PAT.match(line)
             if not match:
                 continue
@@ -68,14 +75,14 @@ class ULzx(extfslib.Archive):
             match_entry = match.groupdict()
             entry = {}
             for key in match_entry:
-                entry[bytes(key, 'utf-8')] = match_entry[key]
+                entry[key] = match_entry[key]
             del match_entry
 
-            entry[b'datetime'] = self._get_date(entry[b'time'], entry[b'date'])
-            entry[b'display_name'] = self._map_name(entry[b'fpath'])
-            entry[b'perms'] = b"-rw-r--r--"  # lzx doesn't store empty dirs
-            entry[b'uid'] = bytes(str(self._uid), 'utf-8')
-            entry[b'gid'] = bytes(str(self._gid), 'utf-8')
+            entry['datetime'] = self._get_date(entry['time'], entry['date'])
+            entry['display_name'] = self._map_name(entry['fpath'])
+            entry['perms'] = "-rw-r--r--"  # lzx doesn't store empty dirs
+            entry['uid'] = str(self._uid)
+            entry['gid'] = str(self._gid)
             contents.append(entry)
 
         return contents
@@ -83,7 +90,7 @@ class ULzx(extfslib.Archive):
     def list(self):
         """Output contents of the archive to stdout"""
         for entry in self._contents:
-            sys.stdout.buffer.write(self.ITEM % entry)
+            sys.stdout.write(self.ITEM.decode('utf-8') % entry)
         return 0
 
     def run(self, dst):
@@ -108,7 +115,13 @@ class ULzx(extfslib.Archive):
         extracted. For small archives is not a problem, but in relatively big
         one it could be a performance issue."""
         tmp_dir = tempfile.mkdtemp()
-        src = self._get_real_name(src)
+        src = [e['display_name'] for e in self._contents
+               if e['display_name'] == src]
+        if not src:
+            raise IOError("No such file or directory")
+
+        src = src[0].encode('latin-1')
+
         current_dir = os.path.abspath(os.curdir)
         os.chdir(tmp_dir)
 

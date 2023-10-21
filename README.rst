@@ -29,12 +29,15 @@ Installation
 
 * install `extfslib`_
 * copy ``ulzx`` to ``~/.local/share/mc/extfs.d/``
-* add or change entry for files handle in ``~/.config/mc/mc.ext``::
+* add or change entry for files handle in ``~/.config/mc/mc.ext``:
 
-    # lzx
-    regex/\.[lL][zZ][xX]$
-         Open=%cd %p/ulzx://
-         View=%view{ascii} unlzx -v %f
+.. code:: ini
+
+   [lzx]
+   Regex=\.lzx$
+   RegexIgnoreCase=true
+   Open=%cd %p/ulzx://
+   View=%view{ascii} unlzx -v %f
 
 License
 =======
