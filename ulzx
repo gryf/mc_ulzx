@@ -44,7 +44,7 @@ class ULzx(extfslib.Archive):
     def _get_date(self, time, date):
         """Return MM-DD-YYYY hh:mm formatted date out of time and date
         strings"""
-        month_list = ["jan", "fe", "mar", "apr", "may", "jun", "jul",
+        month_list = ["jan", "feb", "mar", "apr", "may", "jun", "jul",
                       "aug", "sep", "oct", "nov", "dec"]
         day, month, year = date.split("-")
         month = month_list.index(month) + 1
